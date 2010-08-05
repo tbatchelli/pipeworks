@@ -1,7 +1,8 @@
 (ns pipeworks.core
   (:use [clojure.string :only (split)]
         [clojure.java.io :only (reader)])
-  (:import (java.util StringTokenizer)))
+  (:import (java.util StringTokenizer)
+           (java.util.concurrent LinkedBlockingQueue)))
 
 (defn cat [url]
   (let [rdr (reader url)]
@@ -30,3 +31,52 @@
                   (grep (rest sq) regex)))
     nil)) 
 
+;;;; Autonomous pipeline stages
+
+;;; each stage has one thread that reads from the in-queue, processes
+;;; and queues the result on the out-queue
+;;;
+;;; Some logic is needed to programatically pipe the stages. Multiple
+;;; pipe options should be provided (i.e. split and merge)
+;;;
+;;; consideration should be made to cleaning-up acquired resources when
+;;; the computation is stopped, be it internally (exception,
+;;; finalization) or externally (interruption)
+
+
+(defprotocol stage
+  (enqueue [this x])
+  (dequeue [this]))
+
+(defrecord single-thread-stage
+  [queue]
+  stage
+  (enqueue [_ x] (println "queue: enqueue") (.put queue x))
+  (dequeue [_] (println "queue: dequeue") (.take queue)))
+
+(defn make-processor [process-fn in-queue out-queue]
+  (let [process-one (fn []
+                      (println "processor: processing one... ")
+                      (let [element (.dequeue in-queue)]
+                        (println "processor: dequeued... on to enqueueing")
+                        (.enqueue out-queue (process-fn element))
+                        (println "processor: enqueued... waiting")))
+        process (fn []
+                  (println "processor: starting stage... waiting")
+                  (while true (process-one)))]
+    (Thread. process)))
+
+(defn bypass-worker [x] x)
+
+(defrecord print-stage
+  []
+  stage
+  (enqueue [_ x] (println "print stage: got" x))
+  (dequeue [_] nil))
+
+(comment
+  (def in-queue (single-thread-stage. (LinkedBlockingQueue.)))
+  (def out-queue (print-stage.))
+  (def processor (make-processor reverse in-queue out-queue))
+  (.start processor)
+  (.enqueue in-queue "Hello world!"))
