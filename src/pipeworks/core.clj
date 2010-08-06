@@ -51,18 +51,23 @@
 (defrecord single-thread-stage
   [queue]
   stage
-  (enqueue [_ x] (println "queue: enqueue") (.put queue x))
-  (dequeue [_] (println "queue: dequeue") (.take queue)))
+  (enqueue [_ x]
+           ;(println "queue: enqueue")
+           (.put queue x))
+  (dequeue [_]
+           ;(println "queue: dequeue")
+           (.take queue)))
 
 (defn make-processor [process-fn in-queue out-queue]
   (let [process-one (fn []
-                      (println "processor: processing one... ")
+                ;      (println "processor: processing one... ")
                       (let [element (.dequeue in-queue)]
-                        (println "processor: dequeued... on to enqueueing")
+                ;        (println "processor: dequeued... on to enqueueing")
                         (.enqueue out-queue (process-fn element))
-                        (println "processor: enqueued... waiting")))
+                ;        (println "processor: enqueued... waiting")
+                        ))
         process (fn []
-                  (println "processor: starting stage... waiting")
+               ;   (println "processor: starting stage... waiting")
                   (while true (process-one)))]
     (Thread. process)))
 
@@ -73,6 +78,7 @@
   stage
   (enqueue [_ x] (println "print stage: got" x))
   (dequeue [_] nil))
+
 
 (comment
   (def in-queue (single-thread-stage. (LinkedBlockingQueue.)))
